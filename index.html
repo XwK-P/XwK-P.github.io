@@ -15,12 +15,15 @@
       background-color: #88cc88;
       font-family: Arial, sans-serif;
       overflow: hidden;
+      touch-action: none;
     }
     
     #game-container {
       position: relative;
-      width: 400px;
-      height: 500px;
+      width: 100%;
+      max-width: 400px;
+      height: 100vh;
+      max-height: 600px;
       background-color: #88cc88;
       overflow: hidden;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
@@ -98,44 +101,31 @@
       color: white;
       font-size: 24px;
       display: none;
+      z-index: 300;
     }
     
     #restart-button {
       margin-top: 20px;
-      padding: 10px 20px;
+      padding: 15px 30px;
       background-color: #4CAF50;
       color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
     }
     
-    #controls {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 20px;
-    }
-    
-    .control-row {
-      display: flex;
-      margin: 5px;
-    }
-    
-    .control-button {
-      width: 50px;
-      height: 50px;
-      background-color: rgba(255, 255, 255, 0.7);
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 20px;
-      margin: 5px;
-      cursor: pointer;
-      user-select: none;
+    #instructions {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 10px 0;
+      font-size: 14px;
+      z-index: 200;
     }
   </style>
 </head>
@@ -144,21 +134,12 @@
     <div id="game-area">
       <div id="player"></div>
       <div id="score-display">Score: 0</div>
+      <div id="instructions">Swipe to move • Tap to hop forward</div>
     </div>
     <div id="game-over">
       <div>Game Over!</div>
       <div id="final-score">Score: 0</div>
       <button id="restart-button">Restart</button>
-    </div>
-    <div id="controls">
-      <div class="control-row">
-        <div class="control-button" id="up-button">↑</div>
-      </div>
-      <div class="control-row">
-        <div class="control-button" id="left-button">←</div>
-        <div class="control-button" id="down-button">↓</div>
-        <div class="control-button" id="right-button">→</div>
-      </div>
     </div>
   </div>
 
@@ -169,12 +150,7 @@
     const gameOverScreen = document.getElementById('game-over');
     const finalScore = document.getElementById('final-score');
     const restartButton = document.getElementById('restart-button');
-    
-    // Control buttons
-    const upButton = document.getElementById('up-button');
-    const downButton = document.getElementById('down-button');
-    const leftButton = document.getElementById('left-button');
-    const rightButton = document.getElementById('right-button');
+    const instructions = document.getElementById('instructions');
     
     // Game variables
     let score = 0;
@@ -193,13 +169,36 @@
     let rowHeight = 40; // Default row height
     let rowDirections = {}; // Store direction for each row
     let initialPlayerY = rowHeight * 6 + rowHeight/2 - 15; // Default initial player Y position
+    let gameAreaWidth = gameArea.clientWidth;
+    let gameStarted = false;
+    
+    // Adjust for mobile screen sizes
+    function adjustForScreenSize() {
+      gameAreaWidth = gameArea.clientWidth;
+      const centerX = gameAreaWidth / 2 - 15; // Center player horizontally (player width is 30px)
+      playerPosition.x = centerX;
+      player.style.left = `${playerPosition.x}px`;
+    }
     
     // Initialize game
     function initGame() {
+      // Hide instructions after first game
+      if (gameStarted) {
+        setTimeout(() => {
+          instructions.style.opacity = '0';
+          setTimeout(() => {
+            instructions.style.display = 'none';
+          }, 1000);
+        }, 3000);
+      }
+      
+      gameStarted = true;
+      
       // Reset variables
       score = 0;
       gameSpeed = 1;
-      playerPosition = { x: 200, y: initialPlayerY };
+      adjustForScreenSize();
+      playerPosition.y = initialPlayerY;
       isGameOver = false;
       terrainItems = [];
       vehicles = [];
@@ -340,7 +339,7 @@
         if (direction > 0) {
           xPosition = -width - (i * spacing);
         } else {
-          xPosition = 400 + (i * spacing);
+          xPosition = gameAreaWidth + (i * spacing);
         }
         
         let collision = false;
@@ -405,7 +404,7 @@
         if (direction > 0) {
           xPosition = -width - (i * spacing);
         } else {
-          xPosition = 400 + (i * spacing);
+          xPosition = gameAreaWidth + (i * spacing);
         }
         
         let collision = false;
@@ -473,7 +472,7 @@
         vehicle.position.x += vehicle.speed;
         vehicle.element.style.left = `${vehicle.position.x}px`;
         vehicle.element.style.top = `${vehicle.position.y - cameraOffset}px`;
-        if ((vehicle.speed > 0 && vehicle.position.x > 500) ||
+        if ((vehicle.speed > 0 && vehicle.position.x > gameAreaWidth + 100) ||
             (vehicle.speed < 0 && vehicle.position.x < -100 - vehicle.width)) {
           vehicle.element.remove();
           vehiclesToRemove.push(index);
@@ -497,7 +496,7 @@
         log.position.x += log.speed;
         log.element.style.left = `${log.position.x}px`;
         log.element.style.top = `${log.position.y - cameraOffset}px`;
-        if ((log.speed > 0 && log.position.x > 500) ||
+        if ((log.speed > 0 && log.position.x > gameAreaWidth + 100) ||
             (log.speed < 0 && log.position.x < -100 - log.width)) {
           log.element.remove();
           logsToRemove.push(index);
@@ -538,7 +537,7 @@
         if (!onLog) {
           gameOver();
         }
-        if (playerPosition.x < -30 || playerPosition.x > 400) {
+        if (playerPosition.x < -30 || playerPosition.x > gameAreaWidth) {
           gameOver();
         }
       }
@@ -552,6 +551,9 @@
     // Move player
     function movePlayer(direction) {
       if (isGameOver) return;
+      
+      const stepSize = gameAreaWidth / 10;
+      
       switch (direction) {
         case 'up':
           playerPosition.y -= rowHeight;
@@ -582,12 +584,18 @@
           break;
         case 'left':
           if (playerPosition.x > 0) {
-            playerPosition.x -= 40;
+            playerPosition.x -= stepSize;
+            if (playerPosition.x < 0) {
+              playerPosition.x = 0;
+            }
           }
           break;
         case 'right':
-          if (playerPosition.x < 370) {
-            playerPosition.x += 40;
+          if (playerPosition.x < gameAreaWidth - 30) {
+            playerPosition.x += stepSize;
+            if (playerPosition.x > gameAreaWidth - 30) {
+              playerPosition.x = gameAreaWidth - 30;
+            }
           }
           break;
       }
@@ -646,7 +654,7 @@
       requestAnimationFrame(gameLoop);
     }
     
-    // Keyboard controls
+    // Keyboard controls (for testing on desktop)
     document.addEventListener('keydown', event => {
       if (isGameOver) return;
       switch (event.key) {
@@ -669,57 +677,75 @@
       }
     });
     
-    // Touch controls on buttons
-    upButton.addEventListener('touchstart', () => movePlayer('up'));
-    downButton.addEventListener('touchstart', () => movePlayer('down'));
-    leftButton.addEventListener('touchstart', () => movePlayer('left'));
-    rightButton.addEventListener('touchstart', () => movePlayer('right'));
-    
-    // Click controls (for desktop)
-    upButton.addEventListener('click', () => movePlayer('up'));
-    downButton.addEventListener('click', () => movePlayer('down'));
-    leftButton.addEventListener('click', () => movePlayer('left'));
-    rightButton.addEventListener('click', () => movePlayer('right'));
-    
-    // Swipe and tap controls on game area
+    // Enhanced touch controls
     let touchStartX = 0;
     let touchStartY = 0;
+    let touchStartTime = 0;
     const swipeThreshold = 30;
+    const tapThreshold = 200; // ms
     
     gameArea.addEventListener('touchstart', function(e) {
+      if (isGameOver) return;
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
-    }, false);
+      touchStartTime = Date.now();
+      e.preventDefault();
+    }, { passive: false });
     
     gameArea.addEventListener('touchmove', function(e) {
       e.preventDefault();
-    }, false);
+    }, { passive: false });
     
     gameArea.addEventListener('touchend', function(e) {
+      if (isGameOver) return;
+      
       let touchEndX = e.changedTouches[0].clientX;
       let touchEndY = e.changedTouches[0].clientY;
+      let touchEndTime = Date.now();
       let deltaX = touchEndX - touchStartX;
       let deltaY = touchEndY - touchStartY;
+      let touchDuration = touchEndTime - touchStartTime;
       
-      if (Math.abs(deltaX) < swipeThreshold && Math.abs(deltaY) < swipeThreshold) {
+      // Detect tap (quick touch with minimal movement)
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10 && touchDuration < tapThreshold) {
         movePlayer('up');
-      } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        return;
+      }
+      
+      // Detect swipe direction
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+        // Horizontal swipe
         if (deltaX > 0) {
           movePlayer('right');
         } else {
           movePlayer('left');
         }
-      } else {
+      } else if (Math.abs(deltaY) > swipeThreshold) {
+        // Vertical swipe
         if (deltaY > 0) {
           movePlayer('down');
         } else {
           movePlayer('up');
         }
       }
-    }, false);
+    }, { passive: false });
     
     // Restart button
     restartButton.addEventListener('click', initGame);
+    restartButton.addEventListener('touchstart', function(e) {
+      initGame();
+      e.preventDefault();
+    }, { passive: false });
+    
+    // Handle window resize
+    window.addEventListener('resize', function() {
+      adjustForScreenSize();
+    });
+    
+    // Prevent default touch behavior for the game container
+    document.getElementById('game-container').addEventListener('touchmove', function(e) {
+      e.preventDefault();
+    }, { passive: false });
     
     // Start game
     initGame();
