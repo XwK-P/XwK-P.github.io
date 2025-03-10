@@ -160,15 +160,15 @@
     let terrainItems = [];
     let vehicles = [];
     let logs = [];
-    let highestRow = 0;
-    let playerFixedY = 250; // The fixed Y position where player stays on screen (center)
+    let playerStartRow = 10
     let cameraOffset = 0;   // Camera offset for world movement
     let lastVehicleSpawnTime = {};
     let lastLogSpawnTime = {};
     let gameTime = 0;
     let rowHeight = 40; // Default row height
     let rowDirections = {}; // Store direction for each row
-    let initialPlayerY = rowHeight * 6 + rowHeight/2 - 15; // Default initial player Y position
+    let playerFixedY = rowHeight * playerStartRow + rowHeight/2 - 15; // The fixed Y position where player stays on screen
+    let initialPlayerY = playerFixedY; // Default initial player Y position
     let gameAreaWidth = gameArea.clientWidth;
     let gameStarted = false;
     
@@ -203,7 +203,6 @@
       terrainItems = [];
       vehicles = [];
       logs = [];
-      highestRow = 10;
       cameraOffset = 0;
       lastVehicleSpawnTime = {};
       lastLogSpawnTime = {};
@@ -214,12 +213,9 @@
       const elementsToRemove = document.querySelectorAll('.road, .river, .grass, .vehicle, .log');
       elementsToRemove.forEach(element => element.remove());
       
-      // Calculate the row where player starts
-      const playerStartRow = Math.floor(initialPlayerY / rowHeight);
-      
       // Generate initial terrain
       for (let i = 0; i < 15; i++) {
-        if (i >= playerStartRow - 1 && i <= playerStartRow + 1) {
+        if (i >= playerStartRow - 1) {
           generateSpecificTerrain(i * rowHeight, 'grass');
         } else {
           generateTerrain(i * rowHeight);
@@ -557,19 +553,29 @@
       switch (direction) {
         case 'up':
           playerPosition.y -= rowHeight;
-          const highestTerrain = terrainItems.reduce((prev, current) =>
+          // Recalculate camera offset based on the new player position and the fixed screen Y.
+          cameraOffset = playerPosition.y - playerFixedY;
+
+          // Ensure that the top (visible) area is covered by terrain.
+          // Find the highest (i.e. smallest world y) terrain row:
+          let highestTerrain = terrainItems.reduce((prev, current) =>
             (prev.position < current.position) ? prev : current
           );
-          if (playerPosition.y < highestTerrain.position + rowHeight * 10) {
+          // While the top visible world coordinate (cameraOffset) is above (i.e. less than)
+          // the bottom of the highest terrain row, keep generating a new row above.
+          while (highestTerrain.position > cameraOffset) {
             const newY = highestTerrain.position - rowHeight;
             generateTerrain(newY);
+            highestTerrain = terrainItems.reduce((prev, current) =>
+              (prev.position < current.position) ? prev : current
+            );
           }
+
           score++;
           scoreDisplay.textContent = `Score: ${score}`;
           if (score % 5 === 0) {
             gameSpeed += 0.1;
           }
-          cameraOffset = playerPosition.y - playerFixedY;
           updateWorldPosition();
           break;
         case 'down':
