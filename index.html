@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crossy Road Web</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #88cc88;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    
+    #game-container {
+      position: relative;
+      width: 400px;
+      height: 500px;
+      background-color: #88cc88;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+    
+    #game-area {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    
+    .road {
+      position: absolute;
+      width: 100%;
+      background-color: #333;
+    }
+    
+    .river {
+      position: absolute;
+      width: 100%;
+      background-color: #4488ff;
+    }
+    
+    .grass {
+      position: absolute;
+      width: 100%;
+      background-color: #88cc88;
+    }
+    
+    .vehicle {
+      position: absolute;
+      background-color: red;
+      border-radius: 3px;
+    }
+    
+    .log {
+      position: absolute;
+      background-color: #8B4513;
+      border-radius: 5px;
+    }
+    
+    #player {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-color: yellow;
+      border-radius: 50%;
+      z-index: 100;
+      transition: transform 0.1s;
+    }
+    
+    #score-display {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: white;
+      font-size: 20px;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 5px;
+      z-index: 200;
+    }
+    
+    #game-over {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+      display: none;
+    }
+    
+    #restart-button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+    
+    .control-row {
+      display: flex;
+      margin: 5px;
+    }
+    
+    .control-button {
+      width: 50px;
+      height: 50px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+      margin: 5px;
+      cursor: pointer;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="game-area">
+      <div id="player"></div>
+      <div id="score-display">Score: 0</div>
+    </div>
+    <div id="game-over">
+      <div>Game Over!</div>
+      <div id="final-score">Score: 0</div>
+      <button id="restart-button">Restart</button>
+    </div>
+    <div id="controls">
+      <div class="control-row">
+        <div class="control-button" id="up-button">↑</div>
+      </div>
+      <div class="control-row">
+        <div class="control-button" id="left-button">←</div>
+        <div class="control-button" id="down-button">↓</div>
+        <div class="control-button" id="right-button">→</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const gameArea = document.getElementById('game-area');
+    const player = document.getElementById('player');
+    const scoreDisplay = document.getElementById('score-display');
+    const gameOverScreen = document.getElementById('game-over');
+    const finalScore = document.getElementById('final-score');
+    const restartButton = document.getElementById('restart-button');
+    
+    // Control buttons
+    const upButton = document.getElementById('up-button');
+    const downButton = document.getElementById('down-button');
+    const leftButton = document.getElementById('left-button');
+    const rightButton = document.getElementById('right-button');
+    
+    // Game variables
+    let score = 0;
+    let gameSpeed = 1;
+    let playerPosition = { x: 200, y: 325 };
+    let isGameOver = false;
+    let terrainItems = [];
+    let vehicles = [];
+    let logs = [];
+    let highestRow = 0;
+    let playerFixedY = 250; // The fixed Y position where player stays on screen (center)
+    let cameraOffset = 0;   // Camera offset for world movement
+    let lastVehicleSpawnTime = {};
+    let lastLogSpawnTime = {};
+    let gameTime = 0;
+    let rowHeight = 40; // Default row height
+    let rowDirections = {}; // Store direction for each row
+    let initialPlayerY = rowHeight * 6 + rowHeight/2 - 15; // Default initial player Y position
+    
+    // Initialize game
+    function initGame() {
+      // Reset variables
+      score = 0;
+      gameSpeed = 1;
+      playerPosition = { x: 200, y: initialPlayerY };
+      isGameOver = false;
+      terrainItems = [];
+      vehicles = [];
+      logs = [];
+      highestRow = 10;
+      cameraOffset = 0;
+      lastVehicleSpawnTime = {};
+      lastLogSpawnTime = {};
+      gameTime = 0;
+      rowDirections = {};
+      
+      // Clear game area
+      const elementsToRemove = document.querySelectorAll('.road, .river, .grass, .vehicle, .log');
+      elementsToRemove.forEach(element => element.remove());
+      
+      // Calculate the row where player starts
+      const playerStartRow = Math.floor(initialPlayerY / rowHeight);
+      
+      // Generate initial terrain
+      for (let i = 0; i < 15; i++) {
+        if (i >= playerStartRow - 1 && i <= playerStartRow + 1) {
+          generateSpecificTerrain(i * rowHeight, 'grass');
+        } else {
+          generateTerrain(i * rowHeight);
+        }
+      }
+      
+      // Set initial camera offset to keep player at fixed screen position
+      cameraOffset = playerPosition.y - playerFixedY;
+      
+      // Reset player position
+      player.style.left = `${playerPosition.x}px`;
+      player.style.top = `${playerFixedY}px`;
+      
+      // Update all terrain elements to match initial camera position
+      updateWorldPosition();
+      
+      // Update score display
+      scoreDisplay.textContent = `Score: ${score}`;
+      
+      // Hide game over screen
+      gameOverScreen.style.display = 'none';
+      
+      // Start game loop
+      gameLoop();
+    }
+    
+    // Generate terrain with specific type (for starting area)
+    function generateSpecificTerrain(yPosition, terrainType) {
+      const terrain = document.createElement('div');
+      terrain.className = terrainType;
+      terrain.style.top = `${yPosition - cameraOffset}px`;
+      terrain.style.height = `${rowHeight}px`;
+      gameArea.appendChild(terrain);
+      
+      terrainItems.push({
+        element: terrain,
+        position: yPosition,
+        type: terrainType,
+        height: rowHeight
+      });
+      
+      return terrainType;
+    }
+    
+    // Generate random terrain
+    function generateTerrain(yPosition) {
+      const terrainTypes = ['grass', 'road', 'river'];
+      let terrainType;
+      if (terrainItems.length > 0) {
+        const lastTerrain = terrainItems[terrainItems.length - 1].type;
+        if (lastTerrain === 'river') {
+          terrainType = Math.random() < 0.7 ? 'grass' : 'road';
+        } else if (lastTerrain === 'road') {
+          terrainType = Math.random() < 0.7 ? 'grass' : 'river';
+        } else {
+          terrainType = terrainTypes[Math.floor(Math.random() * 3)];
+        }
+      } else {
+        terrainType = 'grass';
+      }
+      
+      const terrain = document.createElement('div');
+      terrain.className = terrainType;
+      terrain.style.top = `${yPosition - cameraOffset}px`;
+      terrain.style.height = `${rowHeight}px`;
+      gameArea.appendChild(terrain);
+      
+      if (terrainType === 'road' || terrainType === 'river') {
+        rowDirections[yPosition] = Math.random() < 0.5 ? 1 : -1;
+      }
+      
+      if (terrainType === 'road') {
+        createVehicles(yPosition);
+        lastVehicleSpawnTime[yPosition] = gameTime;
+      } else if (terrainType === 'river') {
+        createLogs(yPosition);
+        lastLogSpawnTime[yPosition] = gameTime;
+      }
+      
+      terrainItems.push({
+        element: terrain,
+        position: yPosition,
+        type: terrainType,
+        height: rowHeight
+      });
+      
+      terrainItems.sort((a, b) => b.position - a.position);
+      
+      return terrainType;
+    }
+    
+    // Create vehicles for a road
+    function createVehicles(yPosition) {
+      const direction = rowDirections[yPosition] || (Math.random() < 0.5 ? 1 : -1);
+      if (!rowDirections[yPosition]) {
+        rowDirections[yPosition] = direction;
+      }
+      
+      const speed = (Math.random() * 2 + 1) * gameSpeed * direction;
+      const vehicleCount = Math.floor(Math.random() * 2) + 1;
+      const minSpacing = 100;
+      const speedFactor = Math.abs(speed) * 20;
+      const spacing = Math.floor(Math.random() * 100) + minSpacing + speedFactor;
+      
+      const existingVehicles = vehicles.filter(v => v.road === yPosition);
+      
+      for (let i = 0; i < vehicleCount; i++) {
+        const vehicle = document.createElement('div');
+        vehicle.className = 'vehicle';
+        
+        const width = Math.floor(Math.random() * 60) + 40;
+        const height = Math.floor(rowHeight * 0.75);
+        vehicle.style.width = `${width}px`;
+        vehicle.style.height = `${height}px`;
+        
+        let xPosition;
+        if (direction > 0) {
+          xPosition = -width - (i * spacing);
+        } else {
+          xPosition = 400 + (i * spacing);
+        }
+        
+        let collision = false;
+        for (const existingVehicle of existingVehicles) {
+          const safeDistance = existingVehicle.width + width + 20;
+          if (direction > 0) {
+            if (Math.abs(xPosition - existingVehicle.position.x) < safeDistance) {
+              collision = true;
+              break;
+            }
+          } else {
+            if (Math.abs(xPosition - existingVehicle.position.x) < safeDistance) {
+              collision = true;
+              break;
+            }
+          }
+        }
+        
+        if (collision) continue;
+        
+        const yOffset = (rowHeight - height) / 2;
+        vehicle.style.top = `${yPosition - cameraOffset + yOffset}px`;
+        vehicle.style.left = `${xPosition}px`;
+        gameArea.appendChild(vehicle);
+        
+        vehicles.push({
+          element: vehicle,
+          position: { x: xPosition, y: yPosition + yOffset },
+          speed: speed,
+          width: width,
+          height: height,
+          road: yPosition
+        });
+      }
+    }
+    
+    // Create logs for a river
+    function createLogs(yPosition) {
+      const direction = rowDirections[yPosition] || (Math.random() < 0.5 ? 1 : -1);
+      if (!rowDirections[yPosition]) {
+        rowDirections[yPosition] = direction;
+      }
+      
+      const speed = (Math.random() * 1.5 + 0.5) * gameSpeed * direction;
+      const logCount = Math.floor(Math.random() * 2) + 1;
+      const minSpacing = 120;
+      const speedFactor = Math.abs(speed) * 20;
+      const spacing = Math.floor(Math.random() * 100) + minSpacing + speedFactor;
+      
+      const existingLogs = logs.filter(l => l.river === yPosition);
+      
+      for (let i = 0; i < logCount; i++) {
+        const log = document.createElement('div');
+        log.className = 'log';
+        
+        const width = Math.floor(Math.random() * 80) + 60;
+        const height = Math.floor(rowHeight * 0.75);
+        log.style.width = `${width}px`;
+        log.style.height = `${height}px`;
+        
+        let xPosition;
+        if (direction > 0) {
+          xPosition = -width - (i * spacing);
+        } else {
+          xPosition = 400 + (i * spacing);
+        }
+        
+        let collision = false;
+        for (const existingLog of existingLogs) {
+          const safeDistance = existingLog.width + width + 20;
+          if (direction > 0) {
+            if (Math.abs(xPosition - existingLog.position.x) < safeDistance) {
+              collision = true;
+              break;
+            }
+          } else {
+            if (Math.abs(xPosition - existingLog.position.x) < safeDistance) {
+              collision = true;
+              break;
+            }
+          }
+        }
+        
+        if (collision) continue;
+        
+        const yOffset = (rowHeight - height) / 2;
+        log.style.top = `${yPosition - cameraOffset + yOffset}px`;
+        log.style.left = `${xPosition}px`;
+        gameArea.appendChild(log);
+        
+        logs.push({
+          element: log,
+          position: { x: xPosition, y: yPosition + yOffset },
+          speed: speed,
+          width: width,
+          height: height,
+          river: yPosition
+        });
+      }
+    }
+    
+    // Continually spawn new vehicles and logs
+    function spawnObstacles() {
+      gameTime += 1;
+      terrainItems.forEach(terrain => {
+        if (terrain.type === 'road') {
+          const yPosition = terrain.position;
+          const lastSpawn = lastVehicleSpawnTime[yPosition] || 0;
+          const spawnInterval = Math.random() * 120 + 180;
+          if (gameTime - lastSpawn > spawnInterval) {
+            createVehicles(yPosition);
+            lastVehicleSpawnTime[yPosition] = gameTime;
+          }
+        } else if (terrain.type === 'river') {
+          const yPosition = terrain.position;
+          const lastSpawn = lastLogSpawnTime[yPosition] || 0;
+          const spawnInterval = Math.random() * 180 + 240;
+          if (gameTime - lastSpawn > spawnInterval) {
+            createLogs(yPosition);
+            lastLogSpawnTime[yPosition] = gameTime;
+          }
+        }
+      });
+    }
+    
+    // Move vehicles
+    function moveVehicles() {
+      const vehiclesToRemove = [];
+      vehicles.forEach((vehicle, index) => {
+        vehicle.position.x += vehicle.speed;
+        vehicle.element.style.left = `${vehicle.position.x}px`;
+        vehicle.element.style.top = `${vehicle.position.y - cameraOffset}px`;
+        if ((vehicle.speed > 0 && vehicle.position.x > 500) ||
+            (vehicle.speed < 0 && vehicle.position.x < -100 - vehicle.width)) {
+          vehicle.element.remove();
+          vehiclesToRemove.push(index);
+        }
+        if (checkCollision(
+            playerPosition.x, playerPosition.y, 30, 30,
+            vehicle.position.x, vehicle.position.y, vehicle.width, vehicle.height
+        )) {
+          gameOver();
+        }
+      });
+      for (let i = vehiclesToRemove.length - 1; i >= 0; i--) {
+        vehicles.splice(vehiclesToRemove[i], 1);
+      }
+    }
+    
+    // Move logs
+    function moveLogs() {
+      const logsToRemove = [];
+      logs.forEach((log, index) => {
+        log.position.x += log.speed;
+        log.element.style.left = `${log.position.x}px`;
+        log.element.style.top = `${log.position.y - cameraOffset}px`;
+        if ((log.speed > 0 && log.position.x > 500) ||
+            (log.speed < 0 && log.position.x < -100 - log.width)) {
+          log.element.remove();
+          logsToRemove.push(index);
+        }
+      });
+      for (let i = logsToRemove.length - 1; i >= 0; i--) {
+        logs.splice(logsToRemove[i], 1);
+      }
+    }
+    
+    // Check if player is on a log or in water
+    function checkPlayerOnLog() {
+      let onRiver = false;
+      let currentRow = null;
+      for (const terrain of terrainItems) {
+        if (playerPosition.y >= terrain.position &&
+            playerPosition.y < terrain.position + terrain.height) {
+          if (terrain.type === 'river') {
+            onRiver = true;
+            currentRow = terrain;
+          }
+          break;
+        }
+      }
+      if (onRiver) {
+        let onLog = false;
+        for (const log of logs) {
+          if (checkCollision(
+              playerPosition.x, playerPosition.y, 30, 30,
+              log.position.x, log.position.y, log.width, log.height
+          )) {
+            playerPosition.x += log.speed;
+            player.style.left = `${playerPosition.x}px`;
+            onLog = true;
+            break;
+          }
+        }
+        if (!onLog) {
+          gameOver();
+        }
+        if (playerPosition.x < -30 || playerPosition.x > 400) {
+          gameOver();
+        }
+      }
+    }
+    
+    // Collision detection
+    function checkCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
+      return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+    }
+    
+    // Move player
+    function movePlayer(direction) {
+      if (isGameOver) return;
+      switch (direction) {
+        case 'up':
+          playerPosition.y -= rowHeight;
+          const highestTerrain = terrainItems.reduce((prev, current) =>
+            (prev.position < current.position) ? prev : current
+          );
+          if (playerPosition.y < highestTerrain.position + rowHeight * 10) {
+            const newY = highestTerrain.position - rowHeight;
+            generateTerrain(newY);
+          }
+          score++;
+          scoreDisplay.textContent = `Score: ${score}`;
+          if (score % 5 === 0) {
+            gameSpeed += 0.1;
+          }
+          cameraOffset = playerPosition.y - playerFixedY;
+          updateWorldPosition();
+          break;
+        case 'down':
+          const lowestTerrain = terrainItems.reduce((prev, current) =>
+            (prev.position > current.position) ? prev : current
+          );
+          if (playerPosition.y < lowestTerrain.position - rowHeight) {
+            playerPosition.y += rowHeight;
+            cameraOffset = playerPosition.y - playerFixedY;
+            updateWorldPosition();
+          }
+          break;
+        case 'left':
+          if (playerPosition.x > 0) {
+            playerPosition.x -= 40;
+          }
+          break;
+        case 'right':
+          if (playerPosition.x < 370) {
+            playerPosition.x += 40;
+          }
+          break;
+      }
+      player.style.left = `${playerPosition.x}px`;
+      player.style.transform = 'scale(1.2)';
+      setTimeout(() => {
+        player.style.transform = 'scale(1)';
+      }, 100);
+      checkPlayerOnLog();
+    }
+    
+    // Update the visual position of all world elements based on camera offset
+    function updateWorldPosition() {
+      terrainItems.forEach(item => {
+        item.element.style.top = `${item.position - cameraOffset}px`;
+      });
+      vehicles.forEach(vehicle => {
+        vehicle.element.style.top = `${vehicle.position.y - cameraOffset}px`;
+      });
+      logs.forEach(log => {
+        log.element.style.top = `${log.position.y - cameraOffset}px`;
+      });
+      const terrainToRemove = [];
+      terrainItems.forEach((item, index) => {
+        if (item.position - cameraOffset > 600) {
+          item.element.remove();
+          terrainToRemove.push(index);
+          if (item.type === 'road') {
+            delete lastVehicleSpawnTime[item.position];
+            delete rowDirections[item.position];
+          } else if (item.type === 'river') {
+            delete lastLogSpawnTime[item.position];
+            delete rowDirections[item.position];
+          }
+        }
+      });
+      for (let i = terrainToRemove.length - 1; i >= 0; i--) {
+        terrainItems.splice(terrainToRemove[i], 1);
+      }
+    }
+    
+    // Game over
+    function gameOver() {
+      isGameOver = true;
+      finalScore.textContent = `Score: ${score}`;
+      gameOverScreen.style.display = 'flex';
+    }
+    
+    // Game loop
+    function gameLoop() {
+      if (isGameOver) return;
+      spawnObstacles();
+      moveVehicles();
+      moveLogs();
+      checkPlayerOnLog();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Keyboard controls
+    document.addEventListener('keydown', event => {
+      if (isGameOver) return;
+      switch (event.key) {
+        case 'ArrowUp':
+        case 'w':
+          movePlayer('up');
+          break;
+        case 'ArrowDown':
+        case 's':
+          movePlayer('down');
+          break;
+        case 'ArrowLeft':
+        case 'a':
+          movePlayer('left');
+          break;
+        case 'ArrowRight':
+        case 'd':
+          movePlayer('right');
+          break;
+      }
+    });
+    
+    // Touch controls on buttons
+    upButton.addEventListener('touchstart', () => movePlayer('up'));
+    downButton.addEventListener('touchstart', () => movePlayer('down'));
+    leftButton.addEventListener('touchstart', () => movePlayer('left'));
+    rightButton.addEventListener('touchstart', () => movePlayer('right'));
+    
+    // Click controls (for desktop)
+    upButton.addEventListener('click', () => movePlayer('up'));
+    downButton.addEventListener('click', () => movePlayer('down'));
+    leftButton.addEventListener('click', () => movePlayer('left'));
+    rightButton.addEventListener('click', () => movePlayer('right'));
+    
+    // Swipe and tap controls on game area
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const swipeThreshold = 30;
+    
+    gameArea.addEventListener('touchstart', function(e) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, false);
+    
+    gameArea.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+    }, false);
+    
+    gameArea.addEventListener('touchend', function(e) {
+      let touchEndX = e.changedTouches[0].clientX;
+      let touchEndY = e.changedTouches[0].clientY;
+      let deltaX = touchEndX - touchStartX;
+      let deltaY = touchEndY - touchStartY;
+      
+      if (Math.abs(deltaX) < swipeThreshold && Math.abs(deltaY) < swipeThreshold) {
+        movePlayer('up');
+      } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX > 0) {
+          movePlayer('right');
+        } else {
+          movePlayer('left');
+        }
+      } else {
+        if (deltaY > 0) {
+          movePlayer('down');
+        } else {
+          movePlayer('up');
+        }
+      }
+    }, false);
+    
+    // Restart button
+    restartButton.addEventListener('click', initGame);
+    
+    // Start game
+    initGame();
+  </script>
+</body>
+</html>
